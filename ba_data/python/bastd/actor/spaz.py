@@ -14,6 +14,13 @@ from bastd.actor.powerupbox import PowerupBoxFactory
 from bastd.actor.spazfactory import SpazFactory
 from bastd.gameutils import SharedObjects
 
+from bastd.characters.character import handle_spaz, handle_inputs
+from bastd.characters.inputs import (
+    DoubleJumpMessage,
+    DoublePickupMessage,
+    DoublePunchMessage
+)
+
 if TYPE_CHECKING:
     from typing import Any, Sequence, Callable
 
@@ -192,6 +199,15 @@ class Spaz(ba.Actor):
             self._punch_cooldown = BASE_PUNCH_COOLDOWN
         else:
             self._punch_cooldown = factory.punch_cooldown
+
+        # double press inputs
+        self._double_jump_ipt_time = 200
+        self._double_pickup_ipt_time = 200
+        self._double_punch_ipt_time = 200
+        self._double_jumped = False
+        self._double_pickuped = False
+        self._double_punched = False
+
         self._jump_cooldown = 250
         self._pickup_cooldown = 0
         self._bomb_cooldown = 0
@@ -223,6 +239,9 @@ class Spaz(ba.Actor):
         # Deprecated stuff.. should make these into lists.
         self.punch_callback: Callable[[Spaz], Any] | None = None
         self.pick_up_powerup_callback: Callable[[Spaz], Any] | None = None
+
+        self.character_name = character
+        handle_spaz(self)
 
     def exists(self) -> bool:
         return bool(self.node)
@@ -381,6 +400,16 @@ class Spaz(ba.Actor):
             return
         t_ms = ba.time(timeformat=ba.TimeFormat.MILLISECONDS)
         assert isinstance(t_ms, int)
+
+        # setup for double jump input
+        if (t_ms - self.last_jump_time_ms <= self._double_jump_ipt_time
+            and not self._double_jumped
+        ):
+            self.handlemessage(DoubleJumpMessage())
+            self._double_jumped = True
+        else:
+            self._double_jumped = False
+
         if t_ms - self.last_jump_time_ms >= self._jump_cooldown:
             self.node.jump_pressed = True
             self.last_jump_time_ms = t_ms
@@ -404,6 +433,16 @@ class Spaz(ba.Actor):
             return
         t_ms = ba.time(timeformat=ba.TimeFormat.MILLISECONDS)
         assert isinstance(t_ms, int)
+
+        # setup for double pick up input
+        if (t_ms - self.last_pickup_time_ms <= self._double_pickup_ipt_time
+            and not self._double_pickuped
+        ):
+            self.handlemessage(DoublePickupMessage())
+            self._double_pickuped = True
+        else:
+            self._double_pickuped = False
+
         if t_ms - self.last_pickup_time_ms >= self._pickup_cooldown:
             self.node.pickup_pressed = True
             self.last_pickup_time_ms = t_ms
@@ -446,6 +485,16 @@ class Spaz(ba.Actor):
             return
         t_ms = ba.time(timeformat=ba.TimeFormat.MILLISECONDS)
         assert isinstance(t_ms, int)
+
+        # setup for double punch input
+        if (t_ms - self.last_punch_time_ms <= self._double_punch_ipt_time
+            and not self._double_punched
+        ):
+            self.handlemessage(DoublePunchMessage())
+            self._double_punched = True
+        else:
+            self._double_punched = False
+
         if t_ms - self.last_punch_time_ms >= self._punch_cooldown:
             if self.punch_callback is not None:
                 self.punch_callback(self)
@@ -698,6 +747,8 @@ class Spaz(ba.Actor):
         # pylint: disable=too-many-statements
         # pylint: disable=too-many-branches
         assert not self.expired
+
+        handle_inputs(self, msg)
 
         if isinstance(msg, ba.PickedUpMessage):
             if self.node:
